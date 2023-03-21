@@ -72,4 +72,3 @@ for data, label in tqdm(train_loader):
     output = FCN(data)
 
     print(output)
-    break
