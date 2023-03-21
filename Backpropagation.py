@@ -34,8 +34,13 @@ class FCN(nn.Module):
         # weight between hidden and output layer
         self.w2 = torch.randn(self.hidden_dim, self.output_dim)
 
-    def sigmoid(self, s):
-        return 1/(1 + torch.exp(-s))
+    def sigmoid(self, x):
+        return 1/(1 + torch.exp(-x))
+
+    def softmax(self, x):
+        exp_x = torch.exp(x)
+
+        return exp_x/torch.sum(exp_x, dim=1, keepdim=True)
 
     def forward(self, X):
         # first lienar combination
@@ -47,7 +52,8 @@ class FCN(nn.Module):
         # second lienar combination
         self.y3 = torch.matmul(self.y2, self.w2)
         # second non-linear activate function
-        y4 = self.sigmoid(self.y3)
+        y4 = self.softmax(self.y3)
+        print(y4)
         return y4
 
     def backward(self, X,):
@@ -80,5 +86,5 @@ for data, labels in tqdm(train_loader):
     outputs = model(data)
     loss = cross_entropy_loss(outputs, labels)
     total_loss.append(loss)
-    model.train(data, labels)
+    # model.train(data, labels)
     break
