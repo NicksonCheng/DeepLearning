@@ -2,17 +2,16 @@ import torch
 import torch.nn as nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-import numpy
+import numpy as np
 from tqdm import tqdm
 
 
 def cross_entropy_loss(outputs, labels):
-
-    label_one_hot = torch.zeros(outputs.size())
-    label_one_hot[torch.arange(outputs.size()[0]), labels] = 1
+    # label_one_hot = torch.zeros(outputs.size())
+    # label_one_hot[torch.arange(outputs.size()[0]), labels] = 1
 
     # Compute the loss
-    loss = -(label_one_hot * torch.log(outputs))
+    loss = -(labels * torch.log(outputs))
     loss = loss.sum(dim=1).mean()
     return loss.item()
 
@@ -30,61 +29,60 @@ class FCN(nn.Module):
 
         # weight between input and hidden layer
         self.w1 = torch.randn(self.input_dim, self.hidden_dim)
-
+        self.b1 = torch.randn(self.hidden_dim)
         # weight between hidden and output layer
         self.w2 = torch.randn(self.hidden_dim, self.output_dim)
+        self.b2 = torch.randn(self.output_dim)
 
     def sigmoid(self, x):
-        return 1/(1 + torch.exp(-x))
+        return 1 / (1 + torch.exp(-x))
+
+    def sigmoid_derivative(self, s):
+        return s * (1 - s)
 
     def softmax(self, x):
         exp_x = torch.exp(x)
 
-        return exp_x/torch.sum(exp_x, dim=1, keepdim=True)
+        return exp_x / torch.sum(exp_x, dim=1, keepdim=True)
 
     def forward(self, X):
         # first lienar combination
-        X = torch.reshape(X, (X.shape[0], -1))
-        self.y1 = torch.matmul(X, self.w1)
+        self.y1 = torch.matmul(X, self.w1) + self.b1
         # first non-linear activate function
         self.y2 = self.sigmoid(self.y1)
 
         # second lienar combination
-        self.y3 = torch.matmul(self.y2, self.w2)
+        self.y3 = torch.matmul(self.y2, self.w2) + self.b2
         # second non-linear activate function
         y4 = self.softmax(self.y3)
-        print(y4)
+
         return y4
 
-    def backward(self, X,):
-        pass
+    def backward(self, X, y_hat, y_true):
+        # Calculate gradients of the output layer
+        dL_dy4 = y_hat - y_true  # Gradient of loss w.r.t. y4
+        dL_dy3 = dL_dy4  # Gradient of loss w.r.t. y3
 
-    def train(self, X, l):
-        output_y = self.forward(X)
-        print(output_y)
-        return output_y
+        # Calculate gradients of the second layer weights and biases
+        dL_dw2 = torch.matmul(self.y2.T, dL_dy3)  # Gradient of loss w.r.t. w2
+        dL_db2 = torch.sum(dL_dy3, dim=0)  # Gradient of loss w.r.t. b2
 
+        # Update the parameters of the second layer
+        self.w2 -= self.learning_rate * dL_dw2
+        self.b2 -= self.learning_rate * dL_db2
 
-transform = transforms.Compose([
-    transforms.ToTensor()
-])
-epochs = 10
-batch_size = 64
+        # Calculate gradients of the first layer
+        dL_dy2 = torch.matmul(dL_dy3, self.w2.T)  # Gradient of loss w.r.t. y2
+        dL_dy1 = dL_dy2 * self.sigmoid_derivative(self.y1)  # Gradient of loss w.r.t. y1
 
-train_data = datasets.MNIST(root='./mnist', train=True,
-                            transform=transform, download=True)
-test_data = datasets.MNIST(root='./mnist', train=False,
-                           transform=transform, download=True)
+        # Calculate gradients of the first layer weights and biases
+        dL_dw1 = torch.matmul(X.T, dL_dy1)  # Gradient of loss w.r.t. w1
+        dL_db1 = torch.sum(dL_dy1, dim=0)  # Gradient of loss w.r.t. b1
 
+        # Update the parameters of the first layer
+        self.w1 -= self.learning_rate * dL_dw1
+        self.b1 -= self.learning_rate * dL_db1
 
-train_size = train_data.train_data.shape
-train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
-model = FCN(train_size[1]**2, 10)
-total_loss = []
-for data, labels in tqdm(train_loader):
-    outputs = model(data)
-    loss = cross_entropy_loss(outputs, labels)
-    total_loss.append(loss)
-    # model.train(data, labels)
-    break
+    def train(self, X, y_true):
+        y_hat = self.forward(X)
+        self.backward(X, y_hat, y_true)
