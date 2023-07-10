@@ -55,13 +55,13 @@ class FCN(nn.Module):
         self.y3 = torch.matmul(self.y2, self.w2) + self.b2
         # second non-linear activate function
         y4 = self.softmax(self.y3)
-
+        print(self.w1, self.w2, self.b1, self.b2)
         return y4
 
     def backward(self, X, y_hat, y_true):
         # Calculate gradients of the output layer
         dL_dy4 = y_hat - y_true  # Gradient of loss w.r.t. y4
-        dL_dy3 = dL_dy4  # Gradient of loss w.r.t. y3
+        dL_dy3 = dL_dy4  # softmax BP
 
         # Calculate gradients of the second layer weights and biases
         dL_dw2 = torch.matmul(self.y2.T, dL_dy3)  # Gradient of loss w.r.t. w2
