@@ -1,3 +1,10 @@
+####################################################
+##
+## This Model is simple import Transformer Architecture from pytorch
+##
+##
+####################################################
+
 import torch
 import time
 from torch import nn, Tensor
@@ -5,8 +12,8 @@ from torchtext.data.utils import get_tokenizer
 from torchtext.datasets import WikiText2
 from torchtext.vocab import build_vocab_from_iterator
 from typing import Tuple
-from transformer import TransformerModel
-
+from Transformer import TransformerModel
+from tqdm import tqdm
 
 train_iter = WikiText2(split="train")
 
@@ -54,12 +61,9 @@ bptt = 35  # subdivides the source data into chunks of length
 
 
 def get_batch(source: Tensor, i: int) -> Tuple[Tensor, Tensor]:
-    seq_len = min(bptt, len(source) - 1)
+    seq_len = min(bptt, len(source) - 1 - i)
     data = source[i : i + seq_len]
     target = source[i + 1 : i + seq_len + 1].reshape(-1)
-    print(source.shape)
-    print(data.shape)
-    print(target.shape)
     return data, target
 
 
@@ -72,7 +76,7 @@ ntokens = len(vocab)  # size of vocabulary
 emsize = 200  # embedding dimension
 d_hid = 200  # dimension of the feedforward network model in ``nn.TransformerEncoder``
 nlayers = 2  # number of ``nn.TransformerEncoderLayer`` in ``nn.TransformerEncoder``
-nhead = 2  # number of heads in ``nn.MultiheadAttention``
+nhead = 8  # number of heads in ``nn.MultiheadAttention``
 dropout = 0.2  # dropout probability
 model = TransformerModel(ntokens, emsize, nhead, d_hid, nlayers, dropout).to(device)
 
@@ -84,9 +88,7 @@ model = TransformerModel(
     nlayers=nlayers,
     nhead=nhead,
     dropout=dropout,
-)
-
-
+).to(device=device)
 ######################
 ## Training Process ##
 ######################
@@ -99,27 +101,64 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
 def train(model: nn.Module) -> None:
     model.train()
-    total = train_data.size(0)
-    total_loss = 0.0
-    log_val=200
+    total = train_data.size(0) - 1
+    num_batches = total // bptt
+    batch_total_loss = 0.0
+    log_interval = 200
     start = time.time()
-
     ## every time source is i and target is i+1
-    for batch, i in enumerate(range(0, total, bptt)):
-        data, target = get_batch(train_data, i)
+    for batch, i in tqdm(enumerate(range(0, total, bptt))):
+        data, targets = get_batch(train_data, i)
+        data = data.to(device)
+        targets = targets.to(device)
         output = model(data)
-        loss = criterion(output, target)
+        output_flat = output.view(-1, ntokens)
+        # print(output_flat.size(), targets.size())
+        # print(output_flat[0], targets[0])
+        loss = criterion(output_flat, targets)
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters().0.5) # trimming the gradient
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # trimming the gradient
         optimizer.step()
 
-        total_loss+=loss.item()
-
+        batch_total_loss += loss.item() / log_interval
         ## record loss
+        if batch % log_interval == 0 and batch > 0:
+            print(
+                f"epoch {epoch} | { batch } //{ num_batches } batches   \
+             | loss: {batch_total_loss} | time: {time.time()-start}"
+            )
+            batch_total_loss = 0
+            start = time.time()
 
-        if batch
+
+def evaluate(model: nn.Module) -> None:
+    model.eval()
+    total = val_data.size(0) - 1
+    total_loss = 0.0
+
+    for batch, i in tqdm(enumerate(range(0, total, bptt))):
+        data, targets = get_batch(val_data, i)
+        seq_len = data.size(0)
+        data = data.to(device)
+        targets = targets.to(device)
+
+        output = model(data)
+        output_flat = output.view(-1, ntokens)
+        loss = criterion(output_flat, targets)
+
+        total_loss += seq_len * loss.item()
+    total_loss = total_loss / total
+    return total_loss
+
 
 for epoch in range(epoches):
+    epoch_start_time = time.time()
+
     train(model)
-    break
+    epoch_total_val_loss = evaluate(model)
+    print("-" * 100)
+    print(
+        f"epoch: {epoch} | val loss: {epoch_total_val_loss} | time: {time.time()-epoch_start_time}"
+    )
+    print("-" * 100)
