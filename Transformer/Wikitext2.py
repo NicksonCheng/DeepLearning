@@ -89,7 +89,6 @@ model = TransformerModel(
     nhead=nhead,
     dropout=dropout,
 ).to(device=device)
-exit()
 ######################
 ## Training Process ##
 ######################

@@ -25,8 +25,6 @@ class TransformerModel(nn.Module):
 
         self.init_weights()
 
-        print(self.embedding)
-
     def init_weights(self) -> None:
         initrange = 0.1
         self.embedding.weight.data.uniform_(-initrange, initrange)
