@@ -1,11 +1,7 @@
 import numpy as np
 import torch
 
-
-a = torch.FloatTensor(3, 2)
-# a = a.reshape(-1)
-print(len(a))
-
-
-b = 1234245345.23453635
-print(f"{b:.2f}")
+x = torch.tensor([1, 2, 3, 4])
+print(x)
+torch.unsqueeze(x, 1)
+print(x)
